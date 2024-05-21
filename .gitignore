@@ -5,6 +5,7 @@ record.md
 .vscode/
 build/
 image/
+reference/
 
 # Prerequisites
 *.d
