@@ -17,7 +17,7 @@ struct segdesc {
     unsigned int g : 1;
     unsigned int base_31_24 : 8;
 };
-//g取0，右移应注意防止符号扩展
+//g取0，右移应注意防止符号扩展，（struct segdesc)起强制类型转换作用
 #define SEGDESC(type,base,lim,dpl) (struct segdesc)\
 {  (lim)&0xffff,(base)&0xffff,((unsigned int)(base)>>16)&0xff,type, 1\
     (dpl),1,((unsigned int)(lim)>>16)&0xf,0,0,1,0,(unsigned int)(base)>>24\

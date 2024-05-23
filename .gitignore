@@ -6,6 +6,7 @@ record.md
 build/
 image/
 reference/
+temp/
 
 # Prerequisites
 *.d
