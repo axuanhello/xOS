@@ -19,8 +19,14 @@ struct segdesc {
 };
 //g取0，右移应注意防止符号扩展，（struct segdesc)起强制类型转换作用
 #define SEGDESC(type,base,lim,dpl) (struct segdesc)\
-{  (lim)&0xffff,(base)&0xffff,((unsigned int)(base)>>16)&0xff,type, 1\
-    (dpl),1,((unsigned int)(lim)>>16)&0xf,0,0,1,0,(unsigned int)(base)>>24\
+{  (lim)&0xffff,(unsigned int)(base)&0xffff,((unsigned int)(base)>>16)&0xff,(type), 1\
+    (dpl),1,((unsigned int)(lim)>>16)&0xf,0,0,1,0,/*g=0*/(unsigned int)(base)>>24\
 }   
+//g取1。转换后lim以4k为单位，
+#define SEGDESC32(type, base, lim, dpl) (struct segdesc)\
+{ ((lim) >> 12) & 0xffff, ((unsigned int)(base) & 0xffff,      \
+  (((unsigned int)(base) >> 16) & 0xff, (type), 1, (dpl), 1,       \
+  ((unsigned int)(lim) >> 28, 0, 0, 1, 1, /*g=1*/((unsigned int)(base) >> 24 \
+}
 
 #endif

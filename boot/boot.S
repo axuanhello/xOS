@@ -1,6 +1,6 @@
 #include "config.h"                 
 #嘿，没被当成注释。note: gcc编译选项中已添加-Iinclude，不必写成"inluce/config.h"
-    .global _start, ards_buf, ards_nr, gdt, gdtpos
+    .global _start, ards_buf, ards_nr, gdt, gdt_descr,idt,idt_descr
     .text
 _start:
     .code16
@@ -12,12 +12,10 @@ _start:
     xor %esi,%esi
     mov %ax,%ds
     mov %ax,%es
-    mov $STACK_SEG,%ax
     mov %ax,%ss
-    mov $STACK_START,%sp     #临时设置栈为9F000开始
+    mov $0x7c00,%sp
     mov %sp,%bp
-    
-read_remain:
+read_boot_remain:
     clc     #清除CF位
 # INT $0x13读扇区使用调用参数设置如下:
 # ah = 0x02  读磁盘扇区到内存       al = 需要读出的扇区数量;
@@ -28,14 +26,16 @@ read_remain:
     movw $endsector1,%bx
     #指定读取的开始扇区
     movw $0x2,%cx
-    #指定读取扇区数量al=64，指定读取操作ah=2。64*512B=32KB
-    movw $0x240,%ax
+    #指定读取扇区数量al=10，指定读取操作ah=2。64*512B=32KB
+    movw $0x20A,%ax
     #指定读取第一块磁盘
     movw $0x80,%dx
     int $0x13
+    #返回参数，成功：ah=0,al=读入扇区数
+    #失败：ah=出错码
     #cf=1，读取失败。当提供qemu模拟的磁盘太小，会出错
-    jc read_remain
-
+    jc read_disk_fail
+    
 #获取内存布局，采用int 0x10,eax=0xe820
 get_memory:   
     xor %ebx,%ebx
@@ -43,13 +43,13 @@ get_memory:
     movw $ards_buf,%di      #es:di用于指向存放ards结构体数据区域!Debug!忘记es会左移了，写入了错误的内存区域。
     mov $0x534d4150,%edx    #需指定edx为"SMAP"
 loop_get_memory:
-    mov $ARDS_SIZE,%cx         #指定ards结构体字节长度
-    movl $0xe820,%eax   #指定子功能号
+    mov $ARDS_SIZE,%cx          #指定ards结构体字节长度
+    movl $0xe820,%eax           #指定子功能号
     int $0x15    
-    jc get_memory       #cf为1出错，重试。应该尝试其它办法。在此简化则不尝试
-    add $ARDS_SIZE,%di  #缓冲区di递增
+    jc get_memory               #cf为1出错，重试。应该尝试其它办法。在此简化则不尝试
+    add $ARDS_SIZE,%di          #缓冲区di递增
     incw ards_nr 
-    cmp $0,%ebx         #ebx为0则读取完内存数据
+    cmp $0,%ebx                 #ebx为0则读取完内存数据
     jne loop_get_memory 
 
     mov $8,%si
@@ -61,10 +61,8 @@ loop_get_memory:
     xorl %ebx,%ebx
     #这里就不考虑Low memory设备了
     #因此就应该有历史遗留的1MB的memory hole，直接先加上去1MB。这样算出来物理内存正常。
-    addl $0x100000,%eax
-calculate_memory_size:
-    
-      
+    #addl $0x100000,%eax     #加了也不对，加0x10000才正确？
+calculate_memory_size:  
     addl ards_buf(%si),%eax   #累加ards中所有的length_low。
     adcl %ds:ards_buf(%bp,%si),%ebx  #进位累加ards中所有的length_high
     add $ARDS_SIZE,%si
@@ -72,6 +70,8 @@ calculate_memory_size:
 
     movl %eax,memory_size_low
     movl %ebx,memory_size_high
+    #清下屏
+    #call clear_screen
 start_enter_32:    
     #关中断，32位中断表尚未建立
     cli
@@ -82,7 +82,7 @@ start_enter_32:
     outb %al, $0x92
 
     #加载GDT
-    lgdt gdtpos
+    lgdt gdt_descr
 
     #置cr0,PE位为1，进入保护模式
     movl %cr0,%eax
@@ -103,10 +103,11 @@ start32:
     movw %ax,%ds    #设置数据段选择子为2号gdt项
     movw %ax,%es
     movw %ax,%ss
-    #临时设置栈顶，进入分页后原来的栈失效（因为没指向相同的物理地址），所以此期间就不要使用栈了，呃，不如不设sp。
+    movw %ax,%fs
+    movw %ax,%gs
+    #临时设置栈顶，进入分页后原来的栈可能会失效（因为没指向相同的物理地址）
     movl $0x7c00,%esp 
-    #call bootmain 
-    #TODO 接下来需要将操作系统剩余部分代码从硬盘转到内存，并跳转执行
+    movl %esp,%ebp
 
 
 #借Linus的代码一用:-)
@@ -176,7 +177,7 @@ create_pt_0:
     #addl $PTE_SIZE,%eax !DEBUG!!!
     addl $PAGE_SIZE,%eax
     loop create_pt_0
-    #sgdt gdtpos
+    #sgdt gdt_descr
     
     #接下来应修改原来寄存器指向的地址，使其指向3G~4G的虚拟内存
     #但是栈原来是比较随意地分配的（从实际物理内存16M开始往下）。这块物理内存还没有被映射到页表中！
@@ -188,8 +189,8 @@ create_pt_0:
     #也可以给页表赋值，分配下内存。
     
     movl $KERNEL_VIRTUAL_MEM,%esp
-    addl $0x7c00,%esp
-    
+    addl $0x9fc00,%esp
+    movl %esp,%ebp
   
     #cr3，页目录物理地址
     movl $PAGE_DIR_POS,%eax
@@ -197,28 +198,137 @@ create_pt_0:
     #设置cr0,PG位(31位)
     movl %cr0,%eax
     orl $0x80000000,%eax
-    #开启分页前的测试
+    #开启分页前的hlt测试
     #hlt
     movl %eax,%cr0
     #GDTR存的基址是线性地址，不是逻辑地址（虚拟地址）（如果是逻辑地址就递归分段映射了）
     #开启分页前即是物理地址。但若开启了分页就也不是物理地址了，也要经过分页的映射
     
-    addl $KERNEL_VIRTUAL_MEM,gdtpos+2 
-    lgdt gdtpos     #重新设置GDTR
-    #hlt
+    addl $KERNEL_VIRTUAL_MEM,gdt_descr+2 
+    lgdt gdt_descr     #重新设置GDTR
+    
     #接下来就是畅快的虚拟内存空间啦！得赶快（很久很久之后）实现获取空闲页
-    movb $'V',0xc00b8000
+    #movb $'V',0xc00b8000
+    #hlt
+read_kernel:    
+    #接下来需要将操作系统剩余部分代码从硬盘转到内存，并跳转执行
+    movl $BOOT_END_SECTOR, %eax     #起始扇区。LBA从0开始编号，CHS从1开始编号
+    #物理地址0x10000-0x90000可存放内核，总共0x80000,512KB，1024个扇区
+    movl $KERNEL_START_VADDR,%edi   #内核代码存放虚拟地址
+    movb $255,%cl                   #读取扇区数，目前内核应不会超过255*512B约128KB。
+    call read_disk
     #hlt
     #测试代码
-    call bootmain
+    #call bootmain
+    ljmp $0x8,$KERNEL_START_VADDR
     hlt
+.code16
+clear_screen:
+    #清屏
+    movw $0x0600,%ax
+    movw $0,%bx
+    movw $0,%cx
+    movw $0x184f,%dx    #漏$
+    int $0x10
+    ret
+read_disk_fail_message:   
+.ascii "Fail to read disk."
+read_disk_fail:
+    #call clear_screen
 
-
+    movw $0x1300,%ax
+    #显示行列位置dh,dl
+    movw $0,%dx
+    #字符串长度
+    movw $18,%cx
+    #属性bl,I,R,G,B,(背景) I,R,G,B(前景)
+    movw $0x0107,%bx
+    #es:bp字符串位置
+    movw $read_disk_fail_message,%bp
+    int $0x10
+    hlt
+.code32
 endcode:
 .org 510  #0x1fe
 .byte 0x55,0xaa
 endsector1:
+#读取硬盘到内存。参数：eax起始扇区，LBA28定址；cl读取扇区数；ds:edi，存放内存位置
+read_disk:
+    pushl %eax
+    pushl %ebx
+    pushl %ecx
+    pushl %edx
+    pushl %edi
+    #LBA方式从IO端口读取硬盘数据到内存
+    #端口0x1f3，设置LBA0~7位
+    movw $0x1f3,%dx
+    out %al,%dx
+    #端口0x1f4，设置LBA8~15位
+    movw $0x1f4,%dx
+    shr $8,%eax
+    out %al,%dx
+    #端口0x1f5，设置LBA16~23位
+    movw $0x1f5,%dx
+    shr $8,%eax
+    out %al,%dx
+
+    #端口0x1f6，设置device寄存器，选择LBA寻址模式（6位置1），选择主盘（4位置0），0-3位置LBA地址27~24位，5、7位默认为1
+    movw $0x1f6,%dx
+    shr $8,%eax
+    #4位置0
+    and $0xf,%al
+    #5,6,7位置1
+    or $0xe0,%al 
+    out %al,%dx
+    
+    #端口0x1f2，设置读取扇区数
+    movw $0x1f2,%dx
+    movb %cl,%al
+    out %al,%dx
+
+    #端口0x1f7，设置command读取命令
+    movw $0x1f7,%dx
+    movb $0x20,%al   #command=0x20,read;0x30,write;0xec,identify
+    out %al,%dx
+
+    #轮询方式等待IO数据
+wait_for_disk:    
+    #端口0x1f7，读取status
+    in %dx,%al
+    and $0x89,%al  #只看第0,3,7位。0位错误，3位完成，6位就绪，7位忙
+    cmp $0x08,%al
+    jne wait_for_disk
+
+    #端口0x1f0，每次读取2字节数据，总共需读取cl*512字节，循环cl*256次。
+    #256*256=0x10000,恰溢出cx，cl最大为255，则不会溢出cx。
+    #若使用ecx理应可以扩大循环范围，但是端口仅支持到255个扇区，只用cx即可。
+    movb %cl,%al
+    and $0x00ff,%eax
+    mov $256,%bx
+    mul %bx         #16位乘法，结果低16位存在ax中，高16位存在dx中
+    movl %eax,%ecx
+    movw $0x1f0,%dx
+read_port_data:
+    in %dx,%ax
+    movw %ax,(%edi)
+    addl $2,%edi
+    loop read_port_data
+    
+    popl %edi
+    popl %edx
+    popl %ecx
+    popl %ebx
+    popl %eax
+
+    ret
+
+
+.code32
+
 #存储ARDS结构体
+#0-63位8字节基地址64位
+#64-127位8字节内存长度
+#128-159位4字节内存类型
 ards_buf:
 .fill 30,8,0    #注意编译器要求fill的,size不能大于8，也可使用.zero
 ards_nr:
@@ -267,7 +377,7 @@ DATA_DESC:
 GDT_LIMITS:
 .fill 16,8,0        
 GDT_EXTRA_LIMITS:
-gdtpos:
+gdt_descr:
     .word GDT_LIMITS -gdt-1  #低地址gdt表长度（字节）-1
     .long gdt       #高地址gdt基地址位置
 
@@ -287,7 +397,7 @@ print_int_message:
 
     hlt
     #iret
-.align 2
+.p2align 4
 .word 0
 idt_descr:
 	.word 256*8-1		# idt contains 256 entries
