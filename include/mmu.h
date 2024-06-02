@@ -29,4 +29,28 @@ struct segdesc {
   ((unsigned int)(lim) >> 28, 0, 0, 1, 1, /*g=1*/((unsigned int)(base) >> 24 \
 }
 
+struct gatedesc {
+    unsigned int off_15_0 : 16;
+    unsigned int selector : 16;
+    unsigned int argc : 5;//仅调用门有效
+    unsigned int reserved : 3;
+    unsigned int type : 4;
+    unsigned int s : 1;
+    unsigned int dpl : 2;
+    unsigned int p : 1;
+    unsigned int off_31_16 : 16;
+}__attribute__((packed));
+
+#define SETGATE(gate, istrap, _selector, off, d)    \
+{                                                   \
+  (gate).off_15_0 = (unsigned int)(off) & 0xffff;   \
+  (gate).selector = (_selector);                    \
+  (gate).argc = 0;                                  \
+  (gate).reserved = 0;                              \
+  (gate).type = (istrap) ? 0xf : 0xe;               \
+  (gate).s = 0;                                     \
+  (gate).dpl = (d);                                 \
+  (gate).p = 1;                                     \
+  (gate).off_31_16 = (unsigned int)(off) >> 16;     \
+}
 #endif

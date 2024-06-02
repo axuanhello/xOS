@@ -9,6 +9,7 @@ echo b *0x7c00\n
 b *0x7c00
 echo c\n
 c
+add-symbol-file build/kernel.elf
 define seei
     if $cs==8
         set architecture i386

@@ -1,6 +1,6 @@
 #include "config.h"                 
 #嘿，没被当成注释。note: gcc编译选项中已添加-Iinclude，不必写成"inluce/config.h"
-    .global _start, ards_buf, ards_nr, gdt, gdt_descr,idt,idt_descr
+    .global _start, ards_buf, ards_nr, gdt, gdt_ptr,idt,idt_descr
     .text
 _start:
     .code16
@@ -82,7 +82,7 @@ start_enter_32:
     outb %al, $0x92
 
     #加载GDT
-    lgdt gdt_descr
+    lgdt gdt_ptr
 
     #置cr0,PE位为1，进入保护模式
     movl %cr0,%eax
@@ -109,24 +109,6 @@ start32:
     movl $0x7c00,%esp 
     movl %esp,%ebp
 
-
-#借Linus的代码一用:-)
-setup_idt:
-	lea ignore_int,%edx
-	movl $0x00080000,%eax
-	movw %dx,%ax		/* selector = 0x0008 = cs */
-	movw $0x8E00,%dx	/* interrupt gate - dpl=0, present */
-
-	lea idt,%edi
-    #addl $112,%edi  #只设置缺页中断
-	mov $256,%ecx
-rp_sidt:
-	movl %eax,(%edi)
-	movl %edx,4(%edi)
-	addl $8,%edi
-	dec %ecx
-	jne rp_sidt
-	lidt idt_descr
 
 
     #开启分页机制
@@ -177,7 +159,7 @@ create_pt_0:
     #addl $PTE_SIZE,%eax !DEBUG!!!
     addl $PAGE_SIZE,%eax
     loop create_pt_0
-    #sgdt gdt_descr
+    #sgdt gdt_ptr
     
     #接下来应修改原来寄存器指向的地址，使其指向3G~4G的虚拟内存
     #但是栈原来是比较随意地分配的（从实际物理内存16M开始往下）。这块物理内存还没有被映射到页表中！
@@ -204,8 +186,8 @@ create_pt_0:
     #GDTR存的基址是线性地址，不是逻辑地址（虚拟地址）（如果是逻辑地址就递归分段映射了）
     #开启分页前即是物理地址。但若开启了分页就也不是物理地址了，也要经过分页的映射
     
-    addl $KERNEL_VIRTUAL_MEM,gdt_descr+2 
-    lgdt gdt_descr     #重新设置GDTR
+    addl $KERNEL_VIRTUAL_MEM,gdt_ptr+2 
+    lgdt gdt_ptr     #重新设置GDTR
     
     #接下来就是畅快的虚拟内存空间啦！得赶快（很久很久之后）实现获取空闲页
     #movb $'V',0xc00b8000
@@ -252,7 +234,7 @@ endcode:
 .org 510  #0x1fe
 .byte 0x55,0xaa
 endsector1:
-#读取硬盘到内存。参数：eax起始扇区，LBA28定址；cl读取扇区数；ds:edi，存放内存位置
+#读取硬盘到内存。参数：eax起始扇区，LBA28定址；cl读取扇区数；es:edi，存放内存位置
 read_disk:
     pushl %eax
     pushl %ebx
@@ -290,29 +272,28 @@ read_disk:
     movw $0x1f7,%dx
     movb $0x20,%al   #command=0x20,read;0x30,write;0xec,identify
     out %al,%dx
+next_sector:
+    push %ecx
 
     #轮询方式等待IO数据
 wait_for_disk:    
-    #端口0x1f7，读取status
+    #端口0x1f7，读取status  !重新赋值dx!
+    movw $0x1f7,%dx
     in %dx,%al
     and $0x89,%al  #只看第0,3,7位。0位错误，3位完成，6位就绪，7位忙
     cmp $0x08,%al
+    #nop
     jne wait_for_disk
 
-    #端口0x1f0，每次读取2字节数据，总共需读取cl*512字节，循环cl*256次。
-    #256*256=0x10000,恰溢出cx，cl最大为255，则不会溢出cx。
-    #若使用ecx理应可以扩大循环范围，但是端口仅支持到255个扇区，只用cx即可。
-    movb %cl,%al
-    and $0x00ff,%eax
-    mov $256,%bx
-    mul %bx         #16位乘法，结果低16位存在ax中，高16位存在dx中
-    movl %eax,%ecx
-    movw $0x1f0,%dx
+    #端口0x1f0，每次读取2字节数据，一个扇区512字节，循环256次。
+ 
 read_port_data:
-    in %dx,%ax
-    movw %ax,(%edi)
-    addl $2,%edi
-    loop read_port_data
+    mov $256,%ecx
+    movw $0x1f0,%dx
+    rep insw
+    
+    pop %ecx
+    loop next_sector
     
     popl %edi
     popl %edx
@@ -321,7 +302,6 @@ read_port_data:
     popl %eax
 
     ret
-
 
 .code32
 
@@ -377,29 +357,7 @@ DATA_DESC:
 GDT_LIMITS:
 .fill 16,8,0        
 GDT_EXTRA_LIMITS:
-gdt_descr:
+gdt_ptr:
     .word GDT_LIMITS -gdt-1  #低地址gdt表长度（字节）-1
     .long gdt       #高地址gdt基地址位置
 
-.align 2
-int_message:
-.asciz "INTERRUPT!"
-ignore_int:
-    cld
-    #movl $ignore_int-$int_message,%ecx
-    xorl %edi,%edi
-print_int_message:
-    movb int_message(%edi),%al
-    movb %al,0xb8000(,%edi,2)
-    inc %edi
-    cmp $0,%al
-    jne print_int_message
-
-    hlt
-    #iret
-.p2align 4
-.word 0
-idt_descr:
-	.word 256*8-1		# idt contains 256 entries
-	.long idt
-idt:	.fill 256,8,0	

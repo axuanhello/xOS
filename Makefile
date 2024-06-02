@@ -10,12 +10,18 @@ ENTRYPOINT=0x7c00
 BOOT_LDFLAGS=-m elf_i386 -Ttext $(ENTRYPOINT) 
 LDBIN=--oformat binary
 
+LIB=lib
+LIB_SOURCES=$(wildcard $(LIB)/*.c)
+LIB_OBJS=$(patsubst $(LIB)/%.c,$(BUILD)/$(LIB)/%.o,$(LIB_SOURCES))
+
+
 .PHONY:all
 all: $(BUILD)  imagefile
 #gcc生成头文件依赖关系文件
--include */*.d
+-include **/*.d
 $(BUILD):
 	mkdir $(BUILD)
+	mkdir $(BUILD)/$(LIB)
 $(IMAGE):
 	mkdir $(IMAGE)
 imagefile: $(IMAGE)/disk.img 
@@ -26,9 +32,10 @@ $(IMAGE)/disk.img:$(BUILD)/kernel.bin $(BUILD)/boot.bin | $(IMAGE)
 	dd if=$(BUILD)/boot.bin of=$(IMAGE)/disk.img conv=notrunc
 #跳过目标文件的10个扇区附加
 	dd if=$(BUILD)/kernel.bin of=$(IMAGE)/disk.img conv=notrunc  seek=10 bs=512
-$(BUILD)/kernel.bin:$(BUILD)/main.o 
-	ld  -m elf_i386 -e main -Ttext 0xc0010000 $(BUILD)/main.o  -o $(BUILD)/kernel.elf 
-	ld $(LDBIN) -m  elf_i386 -e main -Ttext 0xc0010000 $(BUILD)/main.o  -o $(BUILD)/kernel.bin
+$(BUILD)/kernel.bin:$(BUILD)/main.o $(BUILD)/interrupt.o $(BUILD)/int.o $(LIB_OBJS)
+	ld  -m elf_i386 -e main -Ttext 0xc0010000 $(BUILD)/main.o $(BUILD)/interrupt.o $(BUILD)/int.o $(LIB_OBJS) -o $(BUILD)/kernel.elf 
+	ld $(LDBIN) -m  elf_i386 -e main -Ttext 0xc0010000 $(BUILD)/main.o $(BUILD)/interrupt.o $(BUILD)/int.o $(LIB_OBJS) -o $(BUILD)/kernel.bin
+#	objcopy -O binary $(BUILD)/kernel.elf $(BUILD)/kernel.bin
 	readelf -a $(BUILD)/kernel.elf > $(BUILD)/kernel_elf.txt
 	objdump -m i386 -D $(BUILD)/kernel.elf > $(BUILD)/kernel_elf_dis.txt
 $(BUILD)/boot.bin:$(BUILD)/boot.elf 
@@ -42,6 +49,12 @@ $(BUILD)/boot.elf:boot/boot.S
 	ld  $(BOOT_LDFLAGS)  $(BUILD)/boot.o  -o $(BUILD)/boot.elf
 $(BUILD)/main.o:kernel/main.c
 	gcc $(CFLAGS) -o $(BUILD)/main.o kernel/main.c
+$(BUILD)/int.o:kernel/int.S
+	gcc $(CFLAGS) -o $(BUILD)/int.o kernel/int.S
+$(BUILD)/interrupt.o:kernel/interrupt.c
+	gcc $(CFLAGS) -o $(BUILD)/interrupt.o kernel/interrupt.c
+$(BUILD)/$(LIB)/%.o:$(LIB)/%.c
+	gcc $(CFLAGS) -o $@ $<
 #boot/bootmain.o:boot/bootmain.c
 #	gcc $(CFLAGS) boot/bootmain.c -o $(BUILD)/bootmain.o
 .PHONY:clean debug run
@@ -50,6 +63,6 @@ clean:
 	rm -rf $(IMAGE)/
 QEMU_FLAGS=-serial stdio
 debug:all
-	qemu-system-i386  -smp 1 -m 128M -s -S -drive file=image/disk.img,index=0,media=disk,format=raw -monitor stdio
+	qemu-system-i386  -smp 1 -m 128M -s -S -drive file=image/disk.img,index=0,media=disk,format=raw -monitor stdio -no-reboot
 run:all
-	qemu-system-i386  -smp 1 -m 128M       -drive file=image/disk.img,index=0,media=disk,format=raw -monitor stdio
+	qemu-system-i386  -smp 1 -m 128M       -drive file=image/disk.img,index=0,media=disk,format=raw -monitor stdio -no-reboot
