@@ -21,6 +21,20 @@ size_t strlen(const char* str) {
     }
     return result;
 }
+
+int strcmp(const char* str1, const char* str2) {
+    size_t i = 0;
+    while (str1[i] && (str1[i] == str2[i])) { ++i; }
+    return str1[i] - str2[i];
+}
+
+char* strcat(char* dest, const char* src) {
+    while (*dest++);
+    --dest;
+    while (*dest++ = *src++);
+    
+}
+
 void* memcpy(void* dest, const void* src, size_t count) {
     char* d = (char*)dest;
     const char* s = (char*)src;
@@ -30,4 +44,29 @@ void* memcpy(void* dest, const void* src, size_t count) {
         ++s;
     }
     return dest;
+}
+
+void* memset(void* str, int c, size_t n) {
+    char* s = (char*)str;
+    while (n--) {
+        *s++ = c;
+    }
+    return str;
+}
+
+int memcmp(const void* str1, const void* str2, size_t n) {
+    const char* s1 = (char*)str1;
+    const char* s2 = (char*)str2;
+    for (size_t i = 0;i < n;++i) {
+        if (s1[i] == s2[i]) {
+            continue;
+        }
+        else if (s1[i] < s2[i]) {
+            return -1;
+        }
+        else if (s1[i] > s2[i]) {
+            return 1;
+        }
+    }
+    return 0;
 }

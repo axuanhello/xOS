@@ -35,7 +35,7 @@ static inline uint8_t __attribute__((always_inline)) inb(uint16_t port) {
 //从端口port读取两字节数据
 static inline uint16_t __attribute__((always_inline)) inw(uint16_t port) {
     uint16_t data;
-    asm volatile ("inb %1,%w0"
+    asm volatile ("inw %1,%w0"
         :"=a"(data)
         :"id"(port));
     return data;

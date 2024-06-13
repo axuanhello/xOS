@@ -104,7 +104,7 @@ void put_char(const char ch) {
     }
 }
 
-void print(const char* str) {
+void put_str(const char* str) {
     size_t len = strlen(str);
     for (size_t i = 0;i < len;++i) {
         put_char(str[i]);

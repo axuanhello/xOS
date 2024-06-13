@@ -1,7 +1,7 @@
 int_message:
 .asciz "Interrupt!"
 .global int_start,int_len
-
+.global timer_interrupt
 .macro int_entry  n
 
     cld
@@ -61,8 +61,52 @@ int_entry 27
 int_entry 28
 int_entry 29
 int_entry 30
-int_entry 31
 int_label:
-int_entry 32
+int_entry 31
 int_len:
     .long . - int_label
+.p2align 2
+/**
+* 无特权级变化栈：（高到低）
+* eflags
+* cs
+* eip
+* (error_code) <--ss:esp
+* 
+* 有特权级变化：
+* ss
+* esp
+* eflags
+* cs
+* eip
+* (error_code) <--ss:esp 
+
+* 若使用pushad 后增加：
+* eax 
+* ecx
+* edx
+* ebx
+* esp
+* ebp
+* esi
+* edi
+* 
+*/
+timer_interrupt:
+    #cli
+    #pushad
+    movl 4(%esp),%eax   //旧cs存放位置
+    andl $0x3,%eax
+    
+    push %eax          //压入cpl作do_timer参数
+    call do_timer
+    add $4,%esp
+
+    movb $0x20,%al
+    #向从片发送EOI
+    outb %al,$0xa0
+    #向主片发送EOI
+    outb %al,$0x20
+    #sti
+    
+    iret

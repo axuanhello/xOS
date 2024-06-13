@@ -39,7 +39,7 @@ struct gatedesc {
     unsigned int dpl : 2;
     unsigned int p : 1;
     unsigned int off_31_16 : 16;
-}__attribute__((packed));
+};
 
 #define SETGATE(gate, istrap, _selector, off, d)    \
 {                                                   \

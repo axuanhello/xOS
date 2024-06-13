@@ -52,27 +52,24 @@ loop_get_memory:
     cmp $0,%ebx                 #ebx为0则读取完内存数据
     jne loop_get_memory 
 
-    mov $8,%si
-    movw ards_nr,%cx
+#    mov $8,%si
+#    movw ards_nr,%cx
     #不能确定这段代码是否正确，因为对ards还不是特别了解，是否存在不连续的情况？
     #按，int 0x15,eax=0xe820返回未排序的列表，其中可能包含未使用的条目，并在极少数情况下可能返回重叠区域。
-    movw $4,%bp 
+#    movw $4,%bp 
     xorl %eax,%eax          #eax必须清零，否则会保留中断返回的SMAP签名
     xorl %ebx,%ebx
-    #这里就不考虑Low memory设备了
-    #因此就应该有历史遗留的1MB的memory hole，直接先加上去1MB。这样算出来物理内存正常。
-    #addl $0x100000,%eax     #加了也不对，加0x10000才正确？
-calculate_memory_size:  
-    addl ards_buf(%si),%eax   #累加ards中所有的length_low。
-    adcl %ds:ards_buf(%bp,%si),%ebx  #进位累加ards中所有的length_high
-    add $ARDS_SIZE,%si
-    loop calculate_memory_size
 
-    movl %eax,memory_size_low
-    movl %ebx,memory_size_high
-    #清下屏
-    #call clear_screen
-start_enter_32:    
+#calculate_memory_size:  
+#    addl ards_buf(%si),%eax   #累加ards中所有的length_low。
+#    adcl %ds:ards_buf(%bp,%si),%ebx  #进位累加ards中所有的length_high
+#    add $ARDS_SIZE,%si
+#    loop calculate_memory_size
+
+#    movl %eax,memory_size_low
+#    movl %ebx,memory_size_high
+
+start_enter_32:
     #关中断，32位中断表尚未建立
     cli
 
@@ -134,20 +131,30 @@ create_pde:
     #设置虚拟内存0xc0000000(3GB)所需要的页目录表指向页表同为0号页目录表项指向的页表，使3GB指向内核空间。(3G>>22=768号页表）
     #其所在物理内存位置为PAGE_DIR_POS+3G>>22*PAGE_DIR_SIZE(即3G>>20=0xc00)
     movl %eax,PAGE_DIR_POS+0xc00
+
     #hlt
-    #分配3GB+4MB~4GB内核虚拟空间的页目录项所指向的页表，
+
+    #分配3GB+4MB~4GB-4MB内核虚拟空间的页目录项所指向的页表，循环254次
     #指向从物理内存0x202000开始的空间，直至0x202000+((4GB-3GB-4MB)/4k*4=1020k)=0x301000用于存放页表
     movl $0x202000,%eax
     orl $PAGE_P_W_U,%eax
     #movl $0xc01,%esi   !!!!!大BUG!!!!
     movl $0xc04,%esi
-    movl $255,%ecx
+    movl $254,%ecx
 create_3G_4G_PDE:
     movl %eax,PAGE_DIR_POS(%esi)
-    addl $PTE_SIZE,%esi
-    #addl $PDE_SIZE,%eax !!!DEBUG!!!
+    addl $PDE_SIZE,%esi
+    #addl $PDE_SIZE,%eax !!!BUG!!!
     addl $PAGE_TABLE_SIZE,%eax
     loop create_3G_4G_PDE
+
+    
+    #设置最后一项页目录项，使其指向页目录表位置，即页目录项第一项
+set_last_pde:
+    movl $PAGE_DIR_POS,%eax
+    orl $PAGE_P_W_U,%eax
+    movl %eax,PAGE_DIR_POS(%esi)
+
 
     #创建0号页目录项对应的页表，虚拟地址与物理地址相等(0~1MB空间为恒等映射,1~4MB尚未映射)
     movl $PAGE_P_W_U,%eax
@@ -156,7 +163,7 @@ create_3G_4G_PDE:
 create_pt_0:
     movl %eax,PAGE_TABLE_POS(,%esi,4)
     incl %esi
-    #addl $PTE_SIZE,%eax !DEBUG!!!
+    #addl $PTE_SIZE,%eax !BUG!!!
     addl $PAGE_SIZE,%eax
     loop create_pt_0
     #sgdt gdt_ptr
@@ -234,6 +241,20 @@ endcode:
 .org 510  #0x1fe
 .byte 0x55,0xaa
 endsector1:
+
+#存储ARDS结构体
+#0-63位8字节基地址64位
+#64-127位8字节内存长度
+#128-159位4字节内存类型
+.org ARDS_NR_OFFSET
+ards_nr:
+.word 0
+.org ARDS_BUFF_OFFSET
+ards_buf:
+.fill 30,8,0    #注意编译器要求fill的,size不能大于8，也可使用.zero
+
+
+
 #读取硬盘到内存。参数：eax起始扇区，LBA28定址；cl读取扇区数；es:edi，存放内存位置
 read_disk:
     pushl %eax
@@ -303,21 +324,6 @@ read_port_data:
 
     ret
 
-.code32
-
-#存储ARDS结构体
-#0-63位8字节基地址64位
-#64-127位8字节内存长度
-#128-159位4字节内存类型
-ards_buf:
-.fill 30,8,0    #注意编译器要求fill的,size不能大于8，也可使用.zero
-ards_nr:
-.word 0
-memory_size:
-memory_size_low:
-.long 0
-memory_size_high:
-.long 0
 
 .p2align 2  #内存对齐到2^2字节处
 
