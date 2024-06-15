@@ -76,12 +76,16 @@ void put_char(const char ch) {
     case '\r':
         set_cursor(cursor / VGA_WIDTH * VGA_WIDTH);
         break;
-    //删除当前光标处内容，然后将光标向前移动一格。
+    //将光标向前移动一格，然后删除当前光标处内容
     case '\b':
-        write_video(cursor, 0);
         if (cursor != 0) {
             set_cursor(cursor - 1);
+            write_video(cursor-1, 0);
         }
+        else {
+            write_video(cursor, 0);
+        }
+        
         break;
     //制表符采用4个格子。
     case '\t':
@@ -139,6 +143,19 @@ void put_uint(unsigned int num) {
         if (show[j]) {
             put_char(show[j]);
         }    
+    }
+}
+void put_uinth(unsigned int num) {
+    static char digits[] = "0123456789ABCDEF";
+    char show[8] = { 0 };
+    int i = 8;
+    do {
+        show[--i] = digits[num % 16];
+    } while ((num /= 16) && i);
+    for (int j = 0;j < sizeof show;++j) {
+        if (show[j]) {
+            put_char(show[j]);
+        }
     }
 }
 void clear_screen() {

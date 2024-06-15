@@ -20,6 +20,7 @@ void set_cursor_r_c(uint8_t row, uint8_t column);
 void put_char(const char ch);
 void put_int(int num);
 void put_uint(unsigned int num);
+void put_uinth(unsigned int num);
 void put_str(const char* str);
 void clear_screen();
 

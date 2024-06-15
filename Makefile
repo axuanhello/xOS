@@ -14,7 +14,8 @@ LIB=lib
 LIB_SOURCES=$(wildcard $(LIB)/*.c)
 LIB_OBJS=$(patsubst $(LIB)/%.c,$(BUILD)/$(LIB)/%.o,$(LIB_SOURCES))
 
-KERNEL_OBJS=$(BUILD)/head.o $(BUILD)/main.o $(BUILD)/interrupt.o $(BUILD)/int.o $(BUILD)/panic.o $(BUILD)/memory.o $(LIB_OBJS)
+KERNEL_OBJS=$(BUILD)/head.o $(BUILD)/main.o $(BUILD)/interrupt.o $(BUILD)/int.o $(BUILD)/gdt.o \
+$(BUILD)/panic.o $(BUILD)/memory.o $(BUILD)/keyboard.o $(LIB_OBJS)
 
 KERNEL_ENTRY=0xc0010000
 KERNEL_LDFLAGS=-m elf_i386 -e _start -Ttext $(KERNEL_ENTRY)
@@ -61,6 +62,8 @@ $(BUILD)/head.o:kernel/head.S
 $(BUILD)/%.o:kernel/%.c
 	gcc $(CFLAGS) -o $@ $<
 $(BUILD)/%.o:mm/%.c
+	gcc $(CFLAGS) -o $@ $<
+$(BUILD)/%.o:kernel/device/%.c
 	gcc $(CFLAGS) -o $@ $<
 $(BUILD)/int.o:kernel/int.S
 	gcc $(CFLAGS) -o $@ $<

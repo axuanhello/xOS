@@ -8,7 +8,7 @@ struct segdesc {
     unsigned int base_23_16 : 8;
     unsigned int type : 4;
     unsigned int s : 1;
-    unsigned int dpl : 1;
+    unsigned int dpl : 2;/*是2！误写成1！*/
     unsigned int p : 1;
     unsigned int lim_19_16 : 4;
     unsigned int avl : 1;
@@ -19,14 +19,29 @@ struct segdesc {
 };
 //g取0，右移应注意防止符号扩展，（struct segdesc)起强制类型转换作用
 #define SEGDESC(type,base,lim,dpl) (struct segdesc)\
-{  (lim)&0xffff,(unsigned int)(base)&0xffff,((unsigned int)(base)>>16)&0xff,(type), 1\
+{   (lim)&0xffff,(unsigned int)(base)&0xffff,((unsigned int)(base)>>16)&0xff,(type), 1\
     (dpl),1,((unsigned int)(lim)>>16)&0xf,0,0,1,0,/*g=0*/(unsigned int)(base)>>24\
 }   
 //g取1。转换后lim以4k为单位，
 #define SEGDESC32(type, base, lim, dpl) (struct segdesc)\
-{ ((lim) >> 12) & 0xffff, ((unsigned int)(base) & 0xffff,      \
-  (((unsigned int)(base) >> 16) & 0xff, (type), 1, (dpl), 1,       \
-  ((unsigned int)(lim) >> 28, 0, 0, 1, 1, /*g=1*/((unsigned int)(base) >> 24 \
+{   ((unsigned int)(lim) >> 12) & 0xffff, (unsigned int)(base) & 0xffff,      \
+    ((unsigned int)(base) >> 16) & 0xff, (type), 1, (dpl), 1,       \
+    (unsigned int)(lim) >> 28, 0, 0, 1, 1, /*g=1*/(unsigned int)(base) >> 24 \
+}
+#define SETSEG32(seg,_type,base,lim,_dpl)             \
+{   (seg).lim_15_0=(unsigned int)(lim) >> 12 & 0xffff;  \
+    (seg).base_15_0=(unsigned int)(base) & 0xffff; \
+    (seg).base_23_16=((unsigned int)(base) >> 16) & 0xff;\
+    (seg).type=_type;\
+    (seg).s=1;\
+    (seg).dpl=_dpl;\
+    (seg).p=1;\
+    (seg).lim_19_16=(unsigned int)(lim) >> 28;\
+    (seg).avl=0;\
+    (seg).l=0;\
+    (seg).d_b=1;\
+    (seg).g=1; /*粒度为4K*/ \
+    (seg).base_31_24=(unsigned int)(base) >> 24;\
 }
 
 struct gatedesc {
@@ -43,14 +58,15 @@ struct gatedesc {
 
 #define SETGATE(gate, istrap, _selector, off, d)    \
 {                                                   \
-  (gate).off_15_0 = (unsigned int)(off) & 0xffff;   \
-  (gate).selector = (_selector);                    \
-  (gate).argc = 0;                                  \
-  (gate).reserved = 0;                              \
-  (gate).type = (istrap) ? 0xf : 0xe;               \
-  (gate).s = 0;                                     \
-  (gate).dpl = (d);                                 \
-  (gate).p = 1;                                     \
-  (gate).off_31_16 = (unsigned int)(off) >> 16;     \
+    (gate).off_15_0 = (unsigned int)(off) & 0xffff; \
+    (gate).selector = (_selector);                  \
+    (gate).argc = 0;                                \
+    (gate).reserved = 0;                            \
+    (gate).type = (istrap) ? 0xf : 0xe;             \
+    (gate).s = 0;                                   \
+    (gate).dpl = (d);                               \
+    (gate).p = 1;                                   \
+    (gate).off_31_16 = (unsigned int)(off) >> 16;   \
 }
+#define SETINT(gate,_selector,off,d) SETGATE(gate,0,_selector,off,d)
 #endif

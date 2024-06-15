@@ -12,7 +12,7 @@ c
 add-symbol-file build/kernel.elf
 set architecture i386
 b main
-#c
+c
 define seei
     if $cs==8
         set architecture i386
