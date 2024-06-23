@@ -20,6 +20,8 @@
 #define PAGE_W              0x2
 #define PAGE_U              0x4
 #define PAGE_P_W_U          0x7
+#define PAGE_SHIFT          12
+#define PAGE_HIGH_SHIFT     20
 #define KERNEL_VIRTUAL_MEM  0xc0000000  //虚拟内存3G~4G映射到内核物理空间。
 #define KERNEL_START_VADDR  0xc0010000  //内核开始存放的虚拟地址
 #define BOOT_END_SECTOR     10          //1~10扇区存bootloader等程序

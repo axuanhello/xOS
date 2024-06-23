@@ -156,17 +156,26 @@ set_last_pde:
     movl %eax,PAGE_DIR_POS(%esi)
 
 
-    #创建0号页目录项对应的页表，虚拟地址与物理地址相等(0~1MB空间为恒等映射,1~4MB尚未映射)
+    #创建0号页目录项对应的页表，虚拟地址与物理地址相等(0~4MB空间为恒等映射)
     movl $PAGE_P_W_U,%eax
     xorl %esi,%esi
-    movl $256,%ecx      #(只映射了前1MB)
+    movl $1024,%ecx      #(映射前4MB)
 create_pt_0:
     movl %eax,PAGE_TABLE_POS(,%esi,4)
     incl %esi
     #addl $PTE_SIZE,%eax !BUG!!!
     addl $PAGE_SIZE,%eax
     loop create_pt_0
-    #sgdt gdt_ptr
+    
+    #设置769-771号页表，15MB-16MB保留，即3GB+4MB~3GB+15MB虚拟地址直接映射到4MB~15MB
+    #11M/4k=0xB00000/0x1000=0xB00
+    movl $0xB00,%ecx
+create_pt_769_771:
+    movl %eax,PAGE_TABLE_POS(,%esi,4)
+    incl %esi
+    addl $PAGE_SIZE,%eax
+    loop create_pt_769_771
+
     
     #接下来应修改原来寄存器指向的地址，使其指向3G~4G的虚拟内存
     #但是栈原来是比较随意地分配的（从实际物理内存16M开始往下）。这块物理内存还没有被映射到页表中！
@@ -178,7 +187,8 @@ create_pt_0:
     #也可以给页表赋值，分配下内存。
     
     movl $KERNEL_VIRTUAL_MEM,%esp
-    addl $0x9fc00,%esp
+    #改啦改啦！大气点，直接给到3GB+15MB向下都是栈！
+    addl $0xB00000,%esp
     movl %esp,%ebp
   
     #cr3，页目录物理地址

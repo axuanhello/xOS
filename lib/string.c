@@ -32,9 +32,95 @@ char* strcat(char* dest, const char* src) {
     while (*dest++);
     --dest;
     while (*dest++ = *src++);
-    
-}
 
+}
+//返回从头开始的子串长度，这一段子串中的字符均可以在strSet中找到。
+size_t strspn(const char* str, const char* strSet) {
+    const char* p1, * p2;
+    size_t count = 0;
+    for (p1 = str; *p1 != '\0'; ++p1) {
+        for (p2 = strSet; *p2 != '\0'; ++p2) {
+            if (*p1 == *p2) {
+                break;
+            }
+        }
+        if (*p2 == '\0') {
+            return count;
+        }
+        ++count;
+    }
+    return count;
+}
+//返回从头开始的子串长度，这一段子串中的字符均不能在strSet中找到。
+size_t strcspn(const char* str, const char* strSet) {
+    const char* p1, * p2;
+    size_t count = 0;
+    for (p1 = str; *p1 != '\0'; ++p1) {
+        for (p2 = strSet; *p2 != '\0'; ++p2) {
+            if (*p1 == *p2)
+                return count;
+        }
+        ++count;
+    }
+
+    return count;
+}
+//寻找第一个出现c的位置
+char* strchr(const char* s, char c) {
+    for (;*s != c; ++s)
+        if (*s == '\0') {
+            return NULL;
+        }
+    return (char*)s;
+}
+//返回str中第一个属于strSet中的字符（地址）
+char* strpbrk(const char* str, const char* strSet) {
+    const char* elem;
+    for (;*str != '\0'; ++str) {
+        for (elem = strSet; *elem != '\0'; ++elem) {
+            if (*str == *elem) {
+                return (char*)str;
+            }
+        }
+    }
+    return NULL;
+}
+char* strtok(char* str, const char* delim) {
+    static char* last;
+    strtok_s(str, delim, &last);
+}
+//strtok内静态变量会导致线程不安全
+char* strtok_s(char* str, const char* delim, char** context) {
+    //指向即将到来的分隔符处。
+    char* end;
+    //*context记录上次分隔符后一个位置，即新子串开始处。
+
+    //不是首次使用，记为上次结束的后一个位置，即新子串开始处。
+    if (!str) {
+        str = *context;
+    }
+
+    //可能开头都是分隔符，跳过开头的若干分隔符。
+    str += strspn(str, delim);
+
+    //已到字符串结束(*context==0)
+    if (*str == '\0'){
+        //*context = str;
+        return NULL;
+    }
+
+    //寻找最长不含分隔符的子串
+    end = str + strcspn(str, delim);
+    if (*end == '\0'){
+        *context = end;
+        return str;
+    }
+
+    //将分割符处设为字符串结束符'\0'，返回分隔符前的子串位置。
+    *end = '\0';
+    *context = end + 1;
+    return str;
+}
 void* memcpy(void* dest, const void* src, size_t count) {
     char* d = (char*)dest;
     const char* s = (char*)src;

@@ -3,6 +3,7 @@ echo target remote localhost:1234\n
 target remote localhost:1234
 echo set architecture i8086\n
 set architecture i8086
+set print pretty on
 #echo display/i $cs*16+$pc
 #display/i $cs*16+$pc
 echo b *0x7c00\n

@@ -9,4 +9,7 @@ typedef short int16_t;
 typedef int int32_t;
 typedef long long int64_t;
 typedef unsigned long long size_t;
+#ifndef NULL
+#define NULL ((void*)0)
+#endif
 #endif
