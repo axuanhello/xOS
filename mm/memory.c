@@ -66,6 +66,8 @@ static void init_ards() {
         global_memory_size = (4LL * 1024LL * 1024LL * 1024LL);
     }
 }
+
+extern struct task_struct* kmain_thread;
 static void init_mem_area() {
     /**
     * 物理内存低16MB保留给OS，不会被后续当作堆分配。boot阶段要确保已经映射了0MB-15MB
@@ -100,6 +102,9 @@ static void init_mem_area() {
     kvmem.end_addr = 4 * 1024LL * 1024 * 1024;
     memset(kvmem.bitmap.map, 0, kvmem.bitmap.byte_size);
     spin_lock_init(&kvmem.lock);
+    
+    //用作内核主线程描述块
+    kmain_thread = (struct task_struct*)(kvmem.bitmap.map + kvmem.bitmap.byte_size);
 
 }
 void mem_init() {

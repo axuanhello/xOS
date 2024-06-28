@@ -1,7 +1,7 @@
 OBJCPYFLAGS= -j .text -j .bss -j .rodata -j .data -O binary
 CC=gcc
 CPPFLAGS=-Iinclude
-CFLAGS=-g -c -O0 -m32 -MMD -Iinclude -fno-pic -fno-pie -fno-stack-protector -fno-builtin -nostdlib -nostdinc -nodefaultlibs -nostartfiles
+CFLAGS=-g3 -c -O0 -m32 -MMD -Iinclude -fno-pic -fno-pie -fno-stack-protector -fno-builtin -nostdlib -nostdinc -nodefaultlibs -nostartfiles
 
 BOOT_ENTRY=0x7c00
 

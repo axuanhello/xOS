@@ -3,11 +3,29 @@
 #include"io.h"
 #include"print.h"
 #include "int.h"
+#include "cpu.h"
+#include "thread.h"
+#define TIMER_F 20
 struct gatedesc idt[256];
 extern void (*int_entry_addr[])(void);
 extern void do_keyboard();
 extern void sendeoi();
+extern struct cpu cpu;
 void do_timer() {
+    ++cpu.run_ticks;
+    ++cpu.curr->elapsed_ticks;
+    enable_int();
+    put_str("current thread: ");
+    put_uint(cpu.curr->pid);
+    put_char(' ');
+    if (cpu.curr->ticks == 0) {
+        put_str("\nticks ran out\n");
+        schedule();
+    }
+    else {
+        --cpu.curr->ticks;
+    }
+
     //put_str("Timer interrupt. cpl:");
     //put_int(cpl);
     
@@ -18,32 +36,27 @@ void int_dispatch(struct intr_stack* pintr_stack) {
     if (pintr_stack->int_no >= 32) {
         switch (pintr_stack->int_no) {
         case 32:
-            put_str("Timer Interrupt. ");
+            //put_str("Timer Interrupt. ");
+            sendeoi();//！！！！
             do_timer();
-            sendeoi();
-            return;
+            break;
         case 33:
             do_keyboard();
             sendeoi();
-            return;
-        case 39:
-            sendeoi();
-            return;
-        case 47:
-            sendeoi();
-            return;
+            break;
         default:
             sendeoi();
-            return;
+            break;
         }
+        return;
     }
     //内中断
     else {
         set_cursor(0);
-        put_str("Interrupt!\t");
+        put_str("Interrupt! No: ");
         put_uint(pintr_stack->int_no);
-        put_str("Error code:");
-        put_uint(pintr_stack->error_code);
+        put_str("  \nError code:");
+        put_uinth(pintr_stack->error_code);
         for (;;) {
             asm("hlt");
         }
@@ -77,11 +90,22 @@ static void pic_init() {
     //outb(0xa1, 0xff);
 
 }
-
+static void timer_init(int frequency) {
+    //控制字，设置计数器编号，读写锁存器，模式
+    outb(0x43, 0 << 6 | 3 << 4 | 2 << 1);
+    uint16_t count;
+    //f过小时只能用最大值。
+    count = (1193180 / frequency)%0xffff;
+    //计数值低8位
+    outb(0x40, (uint8_t)count);
+    //高8位
+    outb(0x40, (uint8_t)(count >> 8));
+}
 
 void idt_init() {
     pic_init();
-    for (int i = 0;i < sizeof(idt)/sizeof(idt[0]);++i) {
+    //timer_init(TIMER_F);
+    for (int i = 0;i < sizeof(idt) / sizeof(idt[0]);++i) {
         //SETGATE(idt[i], 0, 8, &int_start + i * int_len, 0);//啊！BUG!int_start要取地址！不是标号了
         //啊！！！bug！忘记了指针加法会自动乘上上指针指向类型的所占字节作系数！
         //SETGATE(idt[i], 0, 8, (uint32_t)&int_start + i * int_len, 0);

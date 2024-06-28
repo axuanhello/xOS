@@ -56,7 +56,7 @@ void roll_up() {
     }
     uint16_t cursor = (VGA_HEIGHT - 1) * VGA_WIDTH;
     for (int i = 0;i < VGA_WIDTH;++i) {
-        write_video(++cursor,0);
+        write_video(cursor++,0);    //fix bug!不是++cursor.否则新行第一个没清掉
     }
 }
 

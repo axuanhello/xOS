@@ -12,6 +12,7 @@ typedef struct semaphore {
     spinlock_t lock;
 }sem_t;
 
+//仅在编译期生效。
 #define barrier() asm volatile ("":::"memory")
 
 /*

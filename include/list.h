@@ -1,5 +1,7 @@
 #ifndef __LIST_H
 #define __LIST_H
+#define DECLARE_LIST(name) struct list_node name={&name,&name}
+//用作链头时，则next指向第一个节点，prior指向最后一个节点
 struct list_node {
     struct list_node* prior;
     struct list_node* next;
